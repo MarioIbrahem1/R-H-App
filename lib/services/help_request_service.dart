@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:road_helperr/models/help_request.dart';
+import 'package:road_helperr/models/notification_model.dart';
 import 'package:road_helperr/services/api_service.dart';
+import 'package:road_helperr/services/notification_manager.dart';
 import 'package:road_helperr/ui/widgets/help_request_dialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class HelpRequestService {
   static final HelpRequestService _instance = HelpRequestService._internal();
@@ -14,6 +14,7 @@ class HelpRequestService {
   Timer? _checkRequestsTimer;
   final List<String> _processedRequestIds = [];
   bool _isInitialized = false;
+  final NotificationManager _notificationManager = NotificationManager();
 
   // Initialize the service
   Future<void> initialize() async {
@@ -68,33 +69,19 @@ class HelpRequestService {
     // Log the notification
     debugPrint('New help request from ${request.senderName}');
 
-    // Save the request to be displayed in the notification screen
-    await _saveHelpRequestToNotifications(request);
+    // تحويل طلب المساعدة إلى إشعار
+    final notification = NotificationModel(
+      id: request.requestId,
+      title: 'طلب مساعدة',
+      message: 'تلقيت طلب مساعدة من ${request.senderName}',
+      type: NotificationType.helpRequest,
+      timestamp: request.timestamp,
+      data: request.toJson(),
+      isRead: false,
+    );
 
-    // Note: Firebase notifications will be used instead of local notifications
-  }
-
-  // Save help request to notifications list
-  Future<void> _saveHelpRequestToNotifications(HelpRequest request) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Get existing notifications
-      final List<String> notificationIds =
-          prefs.getStringList('notification_ids') ?? [];
-
-      // Add the new notification ID if it doesn't exist
-      if (!notificationIds.contains(request.requestId)) {
-        notificationIds.add(request.requestId);
-        await prefs.setStringList('notification_ids', notificationIds);
-
-        // Save the notification data
-        await prefs.setString('notification_${request.requestId}',
-            '{"type":"help_request","data":${request.toJson().toString().replaceAll('"', '\\"')}}');
-      }
-    } catch (e) {
-      debugPrint('Error saving help request to notifications: $e');
-    }
+    // حفظ الإشعار في مدير الإشعارات
+    await _notificationManager.addNotification(notification);
   }
 
   // Show a help request dialog
@@ -104,37 +91,16 @@ class HelpRequestService {
   }
 
   // Get all help request notifications
-  Future<List<Map<String, dynamic>>> getHelpRequestNotifications() async {
+  Future<List<NotificationModel>> getHelpRequestNotifications() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      // استخدام مدير الإشعارات للحصول على جميع الإشعارات
+      final allNotifications = await _notificationManager.getAllNotifications();
 
-      // Get notification IDs
-      final List<String> notificationIds =
-          prefs.getStringList('notification_ids') ?? [];
-
-      // Get notification data for each ID
-      final List<Map<String, dynamic>> notifications = [];
-
-      for (final id in notificationIds) {
-        final String? notificationData = prefs.getString('notification_$id');
-
-        if (notificationData != null) {
-          try {
-            // Parse the notification data
-            final Map<String, dynamic> data = Map<String, dynamic>.from(
-              Map.castFrom(
-                jsonDecode(notificationData.replaceAll('\\"', '"')),
-              ),
-            );
-
-            notifications.add(data);
-          } catch (e) {
-            debugPrint('Error parsing notification data: $e');
-          }
-        }
-      }
-
-      return notifications;
+      // تصفية الإشعارات للحصول على طلبات المساعدة فقط
+      return allNotifications
+          .where((notification) =>
+              notification.type == NotificationType.helpRequest)
+          .toList();
     } catch (e) {
       debugPrint('Error getting help request notifications: $e');
       return [];
@@ -144,19 +110,8 @@ class HelpRequestService {
   // Clear all notifications
   Future<void> clearAllNotifications() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Get notification IDs
-      final List<String> notificationIds =
-          prefs.getStringList('notification_ids') ?? [];
-
-      // Remove all notification data
-      for (final id in notificationIds) {
-        await prefs.remove('notification_$id');
-      }
-
-      // Clear the notification IDs list
-      await prefs.setStringList('notification_ids', []);
+      // استخدام مدير الإشعارات لمسح جميع الإشعارات
+      await _notificationManager.clearAllNotifications();
     } catch (e) {
       debugPrint('Error clearing notifications: $e');
     }
@@ -165,20 +120,8 @@ class HelpRequestService {
   // Remove a specific notification
   Future<void> removeNotification(String notificationId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Get notification IDs
-      final List<String> notificationIds =
-          prefs.getStringList('notification_ids') ?? [];
-
-      // Remove the notification ID from the list
-      notificationIds.remove(notificationId);
-
-      // Update the notification IDs list
-      await prefs.setStringList('notification_ids', notificationIds);
-
-      // Remove the notification data
-      await prefs.remove('notification_$notificationId');
+      // استخدام مدير الإشعارات لحذف إشعار محدد
+      await _notificationManager.removeNotification(notificationId);
     } catch (e) {
       debugPrint('Error removing notification: $e');
     }

@@ -6,15 +6,15 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:road_helperr/models/user_location.dart';
 import 'package:road_helperr/models/help_request.dart';
 import 'package:road_helperr/models/user_rating.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:road_helperr/services/auth_service.dart';
 
 class ApiService {
   static const String baseUrl = 'http://81.10.91.96:8132';
 
-  // Get token from shared preferences
+  // Get token from auth service
   static Future<String> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
+    final authService = AuthService();
+    final token = await authService.getToken() ?? '';
     debugPrint(
         'Retrieved token: ${token.isNotEmpty ? 'Token exists' : 'Token is empty'}');
     return token;
@@ -54,7 +54,21 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final responseData = json.decode(response.body);
+
+        // حفظ بيانات المصادقة
+        if (responseData['token'] != null) {
+          final authService = AuthService();
+          await authService.saveAuthData(
+            token: responseData['token'],
+            userId: responseData['user_id'] ?? '',
+            email: email,
+            name: responseData['name'],
+          );
+          debugPrint('تم حفظ بيانات المصادقة بعد تسجيل الدخول');
+        }
+
+        return responseData;
       } else {
         final errorBody = json.decode(response.body);
         return {

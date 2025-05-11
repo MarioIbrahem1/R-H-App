@@ -134,7 +134,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Show error message if retry also failed
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-
                 content: Text(
                     'Could not load profile image. Please try again later.')),
           );
@@ -374,27 +373,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       bottomNavigationBar: Container(
         margin: const EdgeInsets.only(bottom: 0),
         child: CurvedNavigationBar(
-        backgroundColor: Theme.of(context).brightness == Brightness.light
-            ? Colors.white
-            : const Color(0xFF01122A),
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF1F3551)
-            : const Color(0xFF023A87),
-        buttonBackgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF1F3551)
-            : const Color(0xFF023A87),
-        animationDuration: const Duration(milliseconds: 300),
-        height: 45,
-        index: _selectedIndex,
-        items: const [
-          Icon(Icons.home_outlined, size: 18, color: Colors.white),
-          Icon(Icons.location_on_outlined, size: 18, color: Colors.white),
-          Icon(Icons.textsms_outlined, size: 18, color: Colors.white),
-          Icon(Icons.notifications_outlined, size: 18, color: Colors.white),
-          Icon(Icons.person_2_outlined, size: 18, color: Colors.white),
-        ],
-        onTap: (index) => _handleNavigation(context, index),
-      ),
+          backgroundColor: Theme.of(context).brightness == Brightness.light
+              ? Colors.white
+              : const Color(0xFF01122A),
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF1F3551)
+              : const Color(0xFF023A87),
+          buttonBackgroundColor: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF1F3551)
+              : const Color(0xFF023A87),
+          animationDuration: const Duration(milliseconds: 300),
+          height: 45,
+          index: _selectedIndex,
+          items: const [
+            Icon(Icons.home_outlined, size: 18, color: Colors.white),
+            Icon(Icons.location_on_outlined, size: 18, color: Colors.white),
+            Icon(Icons.textsms_outlined, size: 18, color: Colors.white),
+            Icon(Icons.notifications_outlined, size: 18, color: Colors.white),
+            Icon(Icons.person_2_outlined, size: 18, color: Colors.white),
+          ],
+          onTap: (index) => _handleNavigation(context, index),
+        ),
       ),
     );
   }

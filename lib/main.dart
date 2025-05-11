@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:road_helperr/providers/settings_provider.dart';
 import 'package:road_helperr/providers/signup_provider.dart';
+import 'package:road_helperr/services/auth_service.dart';
 import 'package:road_helperr/ui/screens/about_screen.dart';
 import 'package:road_helperr/ui/screens/ai_chat.dart';
 import 'package:road_helperr/ui/screens/ai_welcome_screen.dart';
@@ -26,12 +26,22 @@ import 'utils/location_service.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:road_helperr/utils/update_helper.dart';
+import 'package:road_helperr/services/firebase_notification_new.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  Firebase.initializeApp(
+  await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // التحقق من حالة تسجيل الدخول قبل بدء التطبيق
+  final authService = AuthService();
+  final isLoggedIn = await authService.isLoggedIn();
+
+  debugPrint('=== حالة تسجيل الدخول عند بدء التطبيق ===');
+  debugPrint('المستخدم مسجل الدخول: $isLoggedIn');
+  debugPrint('=========================================');
 
   runApp(
     MultiProvider(
@@ -40,26 +50,57 @@ void main() {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
-      child: const MyApp(),
+      child: MyApp(isUserLoggedIn: isLoggedIn),
     ),
   );
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final bool isUserLoggedIn;
+
+  const MyApp({super.key, required this.isUserLoggedIn});
+
   @override
-  _MyAppState createState() => _MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
   final LocationService _locationService = LocationService();
-  late Stream<Position> _positionStream;
+  final UpdateHelper _updateHelper = UpdateHelper();
+  final FirebaseNotification _firebaseNotification = FirebaseNotification();
+
+  // المسار الأولي للتطبيق
+  late String _initialRoute;
 
   @override
   void initState() {
     super.initState();
-    _positionStream = _locationService.positionStream;
+    // تعيين المسار الأولي بناءً على حالة تسجيل الدخول
+    _initialRoute = widget.isUserLoggedIn
+        ? HomeScreen.routeName
+        : OnboardingScreen.routeName;
+
+    debugPrint('=== المسار الأولي للتطبيق ===');
+    debugPrint('المستخدم مسجل الدخول: ${widget.isUserLoggedIn}');
+    debugPrint('المسار الأولي: $_initialRoute');
+    debugPrint('============================');
+
     _checkLocation();
+    _initializeUpdateHelper();
+    _initializeFirebaseNotifications();
+
+    // Delay update check to ensure the app is fully loaded
+    Future.delayed(const Duration(seconds: 2), () {
+      _checkForUpdates();
+    });
+  }
+
+  Future<void> _initializeFirebaseNotifications() async {
+    await _firebaseNotification.initNotification();
+  }
+
+  Future<void> _initializeUpdateHelper() async {
+    await _updateHelper.initialize();
   }
 
   Future<void> _checkLocation() async {
@@ -67,6 +108,17 @@ class _MyAppState extends State<MyApp> {
     bool isLocationEnabled = await _locationService.isLocationServiceEnabled();
     if (!isLocationEnabled) {
       _showLocationDisabledMessage();
+    }
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (mounted) {
+      await _updateHelper.checkForUpdatesOnStartup(context);
+
+      // إعداد التحقق الدوري من التحديثات
+      if (mounted) {
+        await _updateHelper.setupPeriodicUpdateCheck(context);
+      }
     }
   }
 
@@ -92,6 +144,7 @@ class _MyAppState extends State<MyApp> {
     final settingsProvider = Provider.of<SettingsProvider>(context);
 
     return MaterialApp(
+      navigatorKey: navigatorKey, // إضافة مفتاح التنقل للإشعارات
       debugShowCheckedModeBanner: false,
       title: 'Road Helper App',
       theme: ThemeProvider.lightTheme,
@@ -133,7 +186,7 @@ class _MyAppState extends State<MyApp> {
         EmergencyContactsScreen.routeName: (context) =>
             const EmergencyContactsScreen(),
       },
-      initialRoute: OnboardingScreen.routeName,
+      initialRoute: _initialRoute,
     );
   }
 }

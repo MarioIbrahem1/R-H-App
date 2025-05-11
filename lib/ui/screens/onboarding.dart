@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:road_helperr/services/auth_service.dart';
+import 'package:road_helperr/ui/screens/bottomnavigationbar_screes/home_screen.dart';
 import 'on_boarding.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -256,10 +258,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           child: ElevatedButton(
             onPressed: () {
               debugPrint('Get Started button pressed');
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const OnBoarding()),
-              );
+              _navigateToNextScreen();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
@@ -279,6 +278,53 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ),
       ),
     );
+  }
+
+  // التنقل إلى الشاشة التالية بناءً على حالة تسجيل الدخول
+  Future<void> _navigateToNextScreen() async {
+    try {
+      // التحقق مما إذا كان المستخدم مسجل الدخول
+      final authService = AuthService();
+      final isLoggedIn = await authService.isLoggedIn();
+
+      debugPrint('=== التنقل إلى الشاشة التالية ===');
+      debugPrint('حالة تسجيل الدخول: $isLoggedIn');
+
+      // الحصول على رمز المصادقة للتأكد
+      final token = await authService.getToken();
+      debugPrint('رمز المصادقة موجود: ${token != null}');
+      if (token != null) {
+        debugPrint('رمز المصادقة غير فارغ: ${token.isNotEmpty}');
+      }
+      debugPrint('==============================');
+
+      if (isLoggedIn) {
+        // إذا كان المستخدم مسجل الدخول، انتقل مباشرة إلى الشاشة الرئيسية
+        if (mounted) {
+          debugPrint('المستخدم مسجل الدخول، الانتقال إلى الشاشة الرئيسية');
+          Navigator.pushReplacementNamed(context, HomeScreen.routeName);
+        }
+      } else {
+        // إذا لم يكن المستخدم مسجل الدخول، انتقل إلى شاشة تسجيل الدخول
+        if (mounted) {
+          debugPrint(
+              'المستخدم غير مسجل الدخول، الانتقال إلى شاشة تسجيل الدخول');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const OnBoarding()),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('خطأ في التنقل إلى الشاشة التالية: $e');
+      // في حالة حدوث خطأ، انتقل إلى شاشة تسجيل الدخول
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const OnBoarding()),
+        );
+      }
+    }
   }
 
   @override

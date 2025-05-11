@@ -6,6 +6,7 @@ import 'package:road_helperr/ui/screens/bottomnavigationbar_screes/home_screen.d
 import 'package:road_helperr/ui/screens/email_screen.dart';
 import 'package:road_helperr/ui/screens/signupScreen.dart';
 import 'package:road_helperr/services/api_service.dart';
+import 'package:road_helperr/services/auth_service.dart';
 import 'package:road_helperr/services/notification_service.dart';
 import 'package:road_helperr/utils/app_colors.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -232,31 +233,71 @@ class _SignInScreenState extends State<SignInScreen> {
                                   if (!mounted) return;
 
                                   if (response['error'] != null) {
-                                    NotificationService.showInvalidCredentials(
-                                        context);
+                                    if (mounted) {
+                                      NotificationService
+                                          .showInvalidCredentials(context);
+                                    }
                                   } else {
                                     // Save user data if remember me is checked
                                     if (status) {
                                       await _saveUserData();
                                     }
+
                                     // Save logged in user email
                                     final prefs =
                                         await SharedPreferences.getInstance();
                                     await prefs.setString('logged_in_email',
                                         emailController.text);
 
+                                    // حفظ بيانات المصادقة باستخدام خدمة المصادقة
+                                    final authService = AuthService();
+                                    if (response['token'] != null) {
+                                      debugPrint(
+                                          '=== بيانات الاستجابة من تسجيل الدخول ===');
+                                      debugPrint('token: ${response['token']}');
+                                      debugPrint(
+                                          'user_id: ${response['user_id']}');
+                                      debugPrint('name: ${response['name']}');
+                                      debugPrint(
+                                          'email: ${emailController.text}');
+                                      debugPrint(
+                                          '====================================');
+
+                                      await authService.saveAuthData(
+                                        token: response['token'],
+                                        userId: response['user_id'] ?? '',
+                                        email: emailController.text,
+                                        name: response['name'],
+                                      );
+                                      debugPrint(
+                                          'تم حفظ بيانات المصادقة بعد تسجيل الدخول');
+
+                                      // التحقق من حفظ البيانات
+                                      final isLoggedIn =
+                                          await authService.isLoggedIn();
+                                      debugPrint(
+                                          'التحقق بعد الحفظ - حالة تسجيل الدخول: $isLoggedIn');
+                                    }
+
                                     // Show success message before navigation
-                                    NotificationService.showLoginSuccess(
-                                      context,
-                                      onConfirm: () {
-                                        Navigator.of(context)
-                                            .pushReplacementNamed(
-                                                HomeScreen.routeName);
-                                      },
-                                    );
+                                    if (mounted) {
+                                      NotificationService.showLoginSuccess(
+                                        context,
+                                        onConfirm: () {
+                                          if (mounted) {
+                                            Navigator.of(context)
+                                                .pushReplacementNamed(
+                                                    HomeScreen.routeName);
+                                          }
+                                        },
+                                      );
+                                    }
                                   }
                                 } catch (e) {
-                                  NotificationService.showNetworkError(context);
+                                  if (mounted) {
+                                    NotificationService.showNetworkError(
+                                        context);
+                                  }
                                 }
                               }
                             },
