@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:road_helperr/models/notification_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:road_helperr/services/update_service.dart';
+import 'package:road_helperr/models/update_info.dart' as models;
 
 class NotificationManager {
   static final NotificationManager _instance = NotificationManager._internal();
@@ -28,7 +30,7 @@ class NotificationManager {
       final List<NotificationModel> notifications = [];
 
       for (final id in notificationIds) {
-        final String? notificationData = 
+        final String? notificationData =
             prefs.getString('$_notificationPrefix$id');
 
         if (notificationData != null) {
@@ -44,7 +46,7 @@ class NotificationManager {
 
       // ترتيب الإشعارات حسب الوقت (الأحدث أولاً)
       notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      
+
       return notifications;
     } catch (e) {
       debugPrint('خطأ في الحصول على الإشعارات: $e');
@@ -87,7 +89,7 @@ class NotificationManager {
       final prefs = await SharedPreferences.getInstance();
 
       // الحصول على بيانات الإشعار
-      final String? notificationData = 
+      final String? notificationData =
           prefs.getString('$_notificationPrefix$notificationId');
 
       if (notificationData != null) {
@@ -150,13 +152,13 @@ class NotificationManager {
           prefs.getStringList(_notificationIdsKey) ?? [];
 
       // الحصول على بيانات الإشعار لمعرفة ما إذا كان مقروءاً
-      final String? notificationData = 
+      final String? notificationData =
           prefs.getString('$_notificationPrefix$notificationId');
-      
+
       if (notificationData != null) {
         final Map<String, dynamic> data = jsonDecode(notificationData);
         final notification = NotificationModel.fromJson(data);
-        
+
         // إذا كان الإشعار غير مقروء، قم بتقليل العدد
         if (!notification.isRead) {
           final int unreadCount = prefs.getInt(_unreadCountKey) ?? 0;
@@ -193,7 +195,7 @@ class NotificationManager {
 
       // مسح قائمة معرفات الإشعارات
       await prefs.setStringList(_notificationIdsKey, []);
-      
+
       // إعادة تعيين عدد الإشعارات غير المقروءة
       await prefs.setInt(_unreadCountKey, 0);
     } catch (e) {
@@ -210,5 +212,52 @@ class NotificationManager {
       debugPrint('خطأ في الحصول على عدد الإشعارات غير المقروءة: $e');
       return 0;
     }
+  }
+
+  // إضافة إشعار تحديث جديد
+  Future<void> addUpdateNotification({
+    required String version,
+    required String downloadUrl,
+    required String releaseNotes,
+  }) async {
+    final notification = NotificationModel(
+      id: 'update_${DateTime.now().millisecondsSinceEpoch}',
+      title: 'تحديث جديد متاح',
+      body: 'الإصدار $version متاح الآن. انقر للتحديث.',
+      timestamp: DateTime.now(),
+      isRead: false,
+      type: 'update',
+      data: {
+        'version': version,
+        'downloadUrl': downloadUrl,
+        'releaseNotes': releaseNotes,
+      },
+    );
+    await addNotification(notification);
+  }
+
+  // معالجة النقر على إشعار
+  Future<void> handleNotificationTap(
+      NotificationModel notification, BuildContext context) async {
+    if (notification.type == 'update' && notification.data != null) {
+      final downloadUrl = notification.data!['downloadUrl'] as String;
+      final version = notification.data!['version'] as String;
+      final releaseNotes = notification.data!['releaseNotes'] as String;
+
+      // عرض مربع حوار التحديث
+      if (context.mounted) {
+        final updateService = UpdateService();
+        final updateInfo = UpdateInfo(
+          version: version,
+          versionCode: 0,
+          downloadUrl: downloadUrl,
+          releaseNotes: releaseNotes,
+          forceUpdate: false,
+        );
+        updateService.showUpdateDialog(context, updateInfo);
+      }
+    }
+    // تعليم الإشعار كمقروء
+    await markAsRead(notification.id);
   }
 }

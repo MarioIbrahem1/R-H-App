@@ -10,19 +10,19 @@ enum NotificationType {
 class NotificationModel {
   final String id;
   final String title;
-  final String message;
-  final NotificationType type;
+  final String body;
+  final String type;
   final DateTime timestamp;
-  final Map<String, dynamic> data;
+  final Map<String, dynamic>? data;
   bool isRead;
 
   NotificationModel({
     required this.id,
     required this.title,
-    required this.message,
+    required this.body,
     required this.type,
     required this.timestamp,
-    required this.data,
+    this.data,
     this.isRead = false,
   });
 
@@ -30,12 +30,12 @@ class NotificationModel {
     return NotificationModel(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
-      message: json['message'] ?? '',
-      type: _getNotificationType(json['type']),
+      body: json['body'] ?? json['message'] ?? '',
+      type: json['type'] ?? 'other',
       timestamp: json['timestamp'] is String
           ? DateTime.parse(json['timestamp'])
           : DateTime.fromMillisecondsSinceEpoch(json['timestamp']),
-      data: json['data'] ?? {},
+      data: json['data'],
       isRead: json['isRead'] ?? false,
     );
   }
@@ -44,8 +44,8 @@ class NotificationModel {
     return {
       'id': id,
       'title': title,
-      'message': message,
-      'type': describeEnum(type),
+      'body': body,
+      'type': type,
       'timestamp': timestamp.toIso8601String(),
       'data': data,
       'isRead': isRead,
@@ -54,7 +54,7 @@ class NotificationModel {
 
   static NotificationType _getNotificationType(String? type) {
     if (type == null) return NotificationType.other;
-    
+
     switch (type.toLowerCase()) {
       case 'help_request':
         return NotificationType.helpRequest;
@@ -68,15 +68,16 @@ class NotificationModel {
   }
 
   // تحويل من نوع HelpRequest إلى NotificationModel
-  static NotificationModel fromHelpRequest(Map<String, dynamic> helpRequestData) {
+  static NotificationModel fromHelpRequest(
+      Map<String, dynamic> helpRequestData) {
     final String requestId = helpRequestData['requestId'] ?? '';
     final String senderName = helpRequestData['senderName'] ?? '';
-    
+
     return NotificationModel(
       id: requestId,
       title: 'طلب مساعدة',
-      message: 'تلقيت طلب مساعدة من $senderName',
-      type: NotificationType.helpRequest,
+      body: 'تلقيت طلب مساعدة من $senderName',
+      type: 'help_request',
       timestamp: helpRequestData['timestamp'] is String
           ? DateTime.parse(helpRequestData['timestamp'])
           : DateTime.now(),

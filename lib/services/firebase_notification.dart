@@ -1,4 +1,5 @@
-import 'package:road_helperr/ui/screens/bottomnavigationbar_screes/notification_screen.dart';
+import 'package:road_helperr/models/notification_model.dart';
+import 'package:road_helperr/services/notification_manager.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
@@ -7,6 +8,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class FirebaseNotification {
   late final FirebaseMessaging _firebaseMessaging;
+  final NotificationManager _notificationManager = NotificationManager();
 
   Future<void> initNotification() async {
     try {
@@ -14,12 +16,18 @@ class FirebaseNotification {
       _firebaseMessaging = FirebaseMessaging.instance;
 
       // طلب إذن الإشعارات
-      await _firebaseMessaging.requestPermission();
+      await _firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      // الحصول على توكن الجهاز
       String? token = await _firebaseMessaging.getToken();
-      // استخدام debugPrint بدلاً من print للتسجيل في وضع التطوير فقط
       debugPrint("FCM Token: $token");
 
-      handleBackGroundNotification();
+      // إعداد معالجة الإشعارات
+      await handleBackGroundNotification();
     } catch (e) {
       debugPrint("خطأ في تهيئة الإشعارات: $e");
     }
@@ -27,8 +35,28 @@ class FirebaseNotification {
 
   void handleMessage(RemoteMessage? message) {
     if (message == null) return;
-    navigatorKey.currentState!
-        .pushNamed(NotificationScreen.routeName, arguments: message);
+
+    // تحويل رسالة Firebase إلى نموذج الإشعار الخاص بنا
+    final notification = NotificationModel(
+      id: message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      title: message.notification?.title ?? 'إشعار جديد',
+      body: message.notification?.body ?? '',
+      type: message.data['type'] ?? 'system',
+      timestamp: DateTime.now(),
+      data: message.data,
+      isRead: false,
+    );
+
+    // إضافة الإشعار إلى مدير الإشعارات
+    _notificationManager.addNotification(notification);
+
+    // إذا كان التطبيق مفتوحاً، قم بمعالجة الإشعار مباشرة
+    if (navigatorKey.currentState != null) {
+      _notificationManager.handleNotificationTap(
+        notification,
+        navigatorKey.currentState!.context,
+      );
+    }
   }
 
   Future<void> handleBackGroundNotification() async {
@@ -38,6 +66,11 @@ class FirebaseNotification {
 
       // معالجة الإشعارات عندما يكون التطبيق في الخلفية
       FirebaseMessaging.onMessageOpenedApp.listen(handleMessage);
+
+      // معالجة الإشعارات عندما يكون التطبيق مفتوحاً
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        handleMessage(message);
+      });
     } catch (e) {
       debugPrint("خطأ في إعداد معالجة الإشعارات: $e");
     }

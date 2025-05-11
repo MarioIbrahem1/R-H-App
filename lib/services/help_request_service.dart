@@ -73,8 +73,8 @@ class HelpRequestService {
     final notification = NotificationModel(
       id: request.requestId,
       title: 'طلب مساعدة',
-      message: 'تلقيت طلب مساعدة من ${request.senderName}',
-      type: NotificationType.helpRequest,
+      body: 'تلقيت طلب مساعدة من ${request.senderName}',
+      type: 'help_request',
       timestamp: request.timestamp,
       data: request.toJson(),
       isRead: false,
@@ -98,8 +98,7 @@ class HelpRequestService {
 
       // تصفية الإشعارات للحصول على طلبات المساعدة فقط
       return allNotifications
-          .where((notification) =>
-              notification.type == NotificationType.helpRequest)
+          .where((notification) => notification.type == 'help_request')
           .toList();
     } catch (e) {
       debugPrint('Error getting help request notifications: $e');

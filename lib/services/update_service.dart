@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:road_helperr/services/notification_manager.dart';
 
 class UpdateInfo {
   final String version;
@@ -91,6 +90,13 @@ class UpdateService {
       final UpdateInfo? updateInfo = await getUpdateInfo();
 
       if (updateInfo != null) {
+        // إضافة إشعار التحديث
+        await NotificationManager().addUpdateNotification(
+          version: updateInfo.version,
+          downloadUrl: updateInfo.downloadUrl,
+          releaseNotes: updateInfo.releaseNotes,
+        );
+
         if (context.mounted) {
           // عرض مربع حوار للمستخدم
           showUpdateDialog(context, updateInfo);
@@ -132,17 +138,35 @@ class UpdateService {
     );
   }
 
-  // عرض مربع حوار التنزيل
+  // عرض مربع حوار التنزيل - طريقة مبسطة
   void _showDownloadDialog(BuildContext context, UpdateInfo updateInfo) {
     double progress = 0;
     bool isDownloading = true;
     String statusText = 'جاري تنزيل التحديث...';
+
+    // إنشاء مرجع للدالة setState
+    void Function(void Function())? setStateRef;
+
+    // دالة لتحديث حالة مربع الحوار
+    void updateDialogState(double newProgress,
+        {String? newStatus, bool? newIsDownloading}) {
+      if (setStateRef != null) {
+        setStateRef!(() {
+          if (newStatus != null) statusText = newStatus;
+          progress = newProgress;
+          if (newIsDownloading != null) isDownloading = newIsDownloading;
+        });
+      }
+    }
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) {
+          // حفظ مرجع للدالة setState
+          setStateRef = setState;
+
           return AlertDialog(
             title: const Text('تنزيل التحديث'),
             content: Column(
@@ -152,6 +176,52 @@ class UpdateService {
                 const SizedBox(height: 16),
                 LinearProgressIndicator(value: progress),
                 Text('${(progress * 100).toStringAsFixed(0)}%'),
+                const SizedBox(height: 16),
+                if (!isDownloading && progress >= 1.0)
+                  const Text(
+                    'تم فتح المتصفح لتنزيل التحديث. يرجى تثبيت الملف بعد اكتمال التنزيل.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.green),
+                  ),
+                if (!isDownloading && progress < 1.0)
+                  Column(
+                    children: [
+                      const Text(
+                        'إذا لم يتم فتح المتصفح تلقائيًا، يرجى النقر على الزر أدناه.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.orange),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final Uri uri = Uri.parse(updateInfo.downloadUrl);
+                          // محاولة فتح المتصفح بطرق مختلفة
+                          bool launched = await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
+
+                          if (!launched) {
+                            if (context.mounted) {
+                              launched = await launchUrl(
+                                uri,
+                                mode: LaunchMode.platformDefault,
+                              );
+                            }
+                          }
+
+                          if (launched && context.mounted) {
+                            setState(() {
+                              statusText = 'تم فتح المتصفح بنجاح';
+                              progress = 1.0;
+                              isDownloading = false;
+                            });
+                          }
+                        },
+                        child: const Text('تنزيل التحديث'),
+                      ),
+                    ],
+                  ),
               ],
             ),
             actions: [
@@ -162,88 +232,89 @@ class UpdateService {
                   },
                   child: const Text('إغلاق'),
                 ),
+              if (isDownloading)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      isDownloading = false;
+                      statusText = 'تم إلغاء التنزيل';
+                      progress = 0;
+                    });
+                  },
+                  child: const Text('إلغاء'),
+                ),
             ],
           );
         },
       ),
     );
 
-    // بدء تنزيل التحديث
+    // بدء تنزيل التحديث بطريقة مبسطة
     downloadUpdate(
       updateInfo,
       (newProgress) {
         // تحديث شريط التقدم
         if (context.mounted) {
-          (context as Element).markNeedsBuild();
-          progress = newProgress;
-          if (progress >= 1.0) {
-            statusText = 'اكتمل التنزيل. جاري فتح المثبت...';
-            isDownloading = false;
-          }
+          updateDialogState(
+            newProgress,
+            newStatus:
+                newProgress >= 1.0 ? 'اكتمل التنزيل. جاري فتح المثبت...' : null,
+            newIsDownloading: newProgress >= 1.0 ? false : null,
+          );
         }
       },
       onError: (error) {
         if (context.mounted) {
-          (context as Element).markNeedsBuild();
-          statusText = 'حدث خطأ: $error';
-          isDownloading = false;
+          updateDialogState(
+            0.0,
+            newStatus: 'حدث خطأ: $error',
+            newIsDownloading: false,
+          );
         }
       },
     );
   }
 
-  // تنزيل التحديث
+  // تنزيل التحديث - طريقة مبسطة
   Future<void> downloadUpdate(
     UpdateInfo updateInfo,
     Function(double) onProgress, {
     Function(String)? onError,
   }) async {
     try {
-      // طلب الأذونات اللازمة
-      final status = await Permission.storage.request();
-      if (!status.isGranted) {
-        const error = 'تم رفض أذونات التخزين';
-        if (onError != null) onError(error);
-        return;
+      debugPrint('بدء تنزيل التحديث من: ${updateInfo.downloadUrl}');
+
+      // إظهار تقدم وهمي للتنزيل (لأننا نستخدم المتصفح)
+      for (int i = 0; i <= 20; i++) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        onProgress(i / 20);
       }
 
-      // تنزيل الملف
-      final http.Client client = http.Client();
-      final http.Request request =
-          http.Request('GET', Uri.parse(updateInfo.downloadUrl));
-      final http.StreamedResponse response = await client.send(request);
+      // فتح المتصفح مباشرة لتنزيل التحديث
+      final Uri uri = Uri.parse(updateInfo.downloadUrl);
+      debugPrint('فتح المتصفح لتنزيل التحديث: $uri');
 
-      final int totalBytes = response.contentLength ?? 0;
-      int receivedBytes = 0;
+      // استخدام LaunchMode.externalNonBrowserApplication لفتح متجر التطبيقات أو مدير التنزيلات
+      bool launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
 
-      if (response.statusCode == 200) {
-        final List<int> bytes = [];
-
-        response.stream.listen(
-          (List<int> newBytes) {
-            bytes.addAll(newBytes);
-            receivedBytes += newBytes.length;
-            onProgress(totalBytes > 0 ? receivedBytes / totalBytes : 0);
-          },
-          onDone: () async {
-            client.close();
-
-            // فتح المتصفح لتنزيل التحديث
-            final Uri uri = Uri.parse(updateInfo.downloadUrl);
-            if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-              if (onError != null) onError('فشل في فتح رابط التحديث');
-            }
-          },
-          onError: (e) {
-            client.close();
-            if (onError != null) onError(e.toString());
-          },
-          cancelOnError: true,
+      if (!launched) {
+        // محاولة ثانية باستخدام وضع مختلف
+        launched = await launchUrl(
+          uri,
+          mode: LaunchMode.platformDefault,
         );
-      } else {
-        client.close();
-        final error = 'فشل في تنزيل التحديث: ${response.statusCode}';
+      }
+
+      if (!launched) {
+        const error = 'فشل في فتح رابط التحديث';
+        debugPrint(error);
         if (onError != null) onError(error);
+      } else {
+        debugPrint('تم فتح المتصفح بنجاح');
+        onProgress(1.0);
       }
     } catch (e) {
       debugPrint('خطأ في تنزيل التحديث: $e');

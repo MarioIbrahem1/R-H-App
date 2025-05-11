@@ -59,7 +59,8 @@ class UpdateHelper {
       final response = await http.get(Uri.parse(updateJsonUrl));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
+        final Map<String, dynamic> data =
+            json.decode(utf8.decode(response.bodyBytes));
 
         // إنشاء كائن UpdateInfo من البيانات
         final UpdateInfo updateInfo = UpdateInfo(

@@ -79,19 +79,9 @@ class FirebaseNotification {
     final notification = message.notification;
 
     // تحديد نوع الإشعار
-    NotificationType type = NotificationType.other;
+    String type = 'other';
     if (data.containsKey('type')) {
-      switch (data['type']) {
-        case 'help_request':
-          type = NotificationType.helpRequest;
-          break;
-        case 'update_available':
-          type = NotificationType.updateAvailable;
-          break;
-        case 'system_message':
-          type = NotificationType.systemMessage;
-          break;
-      }
+      type = data['type'] as String;
     }
 
     // إنشاء معرف فريد للإشعار
@@ -102,7 +92,7 @@ class FirebaseNotification {
     return NotificationModel(
       id: id,
       title: notification?.title ?? 'إشعار جديد',
-      message: notification?.body ?? '',
+      body: notification?.body ?? '',
       type: type,
       timestamp: DateTime.now(),
       data: data,

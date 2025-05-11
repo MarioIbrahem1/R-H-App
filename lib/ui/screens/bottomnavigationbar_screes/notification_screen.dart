@@ -45,8 +45,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final updateNotification = NotificationModel(
       id: 'test_update_${DateTime.now().millisecondsSinceEpoch}',
       title: 'تحديث جديد متاح',
-      message: 'يتوفر تحديث جديد للتطبيق. انقر هنا للتحديث.',
-      type: NotificationType.updateAvailable,
+      body: 'يتوفر تحديث جديد للتطبيق. انقر هنا للتحديث.',
+      type: 'update',
       timestamp: DateTime.now(),
       data: {'version': '1.2.0', 'url': 'https://example.com/update'},
       isRead: false,
@@ -56,8 +56,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final systemNotification = NotificationModel(
       id: 'test_system_${DateTime.now().millisecondsSinceEpoch + 1}',
       title: 'Welcome Message',
-      message: 'مرحباً بك في تطبيق Road Helper! نتمنى لك تجربة ممتعة.',
-      type: NotificationType.systemMessage,
+      body: 'مرحباً بك في تطبيق Road Helper! نتمنى لك تجربة ممتعة.',
+      type: 'system_message',
       timestamp: DateTime.now().subtract(const Duration(hours: 2)),
       data: {},
       isRead: false,
@@ -151,15 +151,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
     await _markAsRead(notification);
 
     // عرض محتوى الإشعار حسب نوعه
-    if (notification.type == NotificationType.helpRequest) {
+    if (notification.type == 'help_request') {
       await _showHelpRequestDialog(notification);
+    } else if (notification.type == 'update') {
+      // معالجة إشعار التحديث
+      await NotificationManager().handleNotificationTap(notification, context);
     } else if (mounted) {
       // عرض محتوى الإشعارات الأخرى
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: Text(notification.title),
-          content: Text(notification.message),
+          content: Text(notification.body),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -174,8 +177,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
   // عرض حوار طلب المساعدة
   Future<void> _showHelpRequestDialog(NotificationModel notification) async {
     try {
+      if (notification.data == null) {
+        debugPrint('لا توجد بيانات لطلب المساعدة');
+        return;
+      }
+
       // تحويل بيانات الإشعار إلى كائن HelpRequest
-      final request = HelpRequest.fromJson(notification.data);
+      final request = HelpRequest.fromJson(notification.data!);
 
       // عرض الحوار
       final result =
@@ -472,85 +480,76 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
     // تحديد أيقونة الإشعار حسب النوع
     IconData notificationIcon;
+    Color iconColor = Colors.white;
+    Color iconBackgroundColor = AppColors.getSwitchColor(context);
+
     switch (notification.type) {
-      case NotificationType.helpRequest:
+      case 'help_request':
         notificationIcon = Icons.help_outline;
         break;
-      case NotificationType.updateAvailable:
+      case 'update':
         notificationIcon = Icons.system_update;
+        iconBackgroundColor = Colors.green;
         break;
-      case NotificationType.systemMessage:
+      case 'system_message':
         notificationIcon = Icons.info_outline;
+        iconBackgroundColor = Colors.orange;
         break;
       default:
         notificationIcon = Icons.notifications_none;
     }
 
-    // إذا كان الإشعار من نوع طلب مساعدة، استخرج بيانات الطلب
-    String title = notification.title;
-    String message = notification.message;
-
-    if (notification.type == NotificationType.helpRequest) {
-      try {
-        final request = HelpRequest.fromJson(notification.data);
-        title = 'طلب مساعدة من ${request.senderName}';
-        if (request.message != null && request.message!.isNotEmpty) {
-          message = request.message!;
-        }
-      } catch (e) {
-        debugPrint('خطأ في استخراج بيانات طلب المساعدة: $e');
-      }
-    }
-
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       elevation: 2,
-      child: Container(
-        color: backgroundColor,
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: AppColors.getSwitchColor(context),
-            child: Icon(notificationIcon, color: Colors.white),
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              fontSize: titleSize * 0.8,
-              fontWeight:
-                  notification.isRead ? FontWeight.normal : FontWeight.bold,
+      child: InkWell(
+        onTap: () => _showNotificationContent(notification),
+        child: Container(
+          color: backgroundColor,
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: iconBackgroundColor,
+              child: Icon(notificationIcon, color: iconColor),
             ),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text(
-                message,
-                style: TextStyle(fontSize: subtitleSize * 0.9),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+            title: Text(
+              notification.title,
+              style: TextStyle(
+                fontSize: titleSize * 0.8,
+                fontWeight:
+                    notification.isRead ? FontWeight.normal : FontWeight.bold,
               ),
-              const SizedBox(height: 4),
-              Text(
-                '$timeString - $dateString',
-                style: TextStyle(
-                  fontSize: subtitleSize * 0.8,
-                  color: Colors.grey,
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  notification.body,
+                  style: TextStyle(fontSize: subtitleSize * 0.9),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          trailing: notification.isRead
-              ? null
-              : Container(
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: Colors.blue,
-                    shape: BoxShape.circle,
+                const SizedBox(height: 4),
+                Text(
+                  '$timeString - $dateString',
+                  style: TextStyle(
+                    fontSize: subtitleSize * 0.8,
+                    color: Colors.grey,
                   ),
                 ),
-          onTap: () => _showNotificationContent(notification),
+              ],
+            ),
+            trailing: notification.isRead
+                ? null
+                : Container(
+                    width: 12,
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+          ),
         ),
       ),
     );
